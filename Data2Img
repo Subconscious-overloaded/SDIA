@@ -1,1 +1,173 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Mar  4 09:38:00 2024
 
+@author: admvuh
+"""
+
+import os
+import requests
+from zipfile import ZipFile, BadZipFile
+import shutil
+import re
+from scipy.io import loadmat
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.signal import stft
+import pickle
+
+
+def unzip_all_files(input_folder='downloads', output_folder='extracted'):
+    os.makedirs(output_folder, exist_ok=True)
+
+    # List all files in the input folder
+    file_list = os.listdir(input_folder)
+
+    # Filter files based on the pattern file.zip.number
+    zip_files = [file for file in file_list if re.match(r'^.*\.zip\.\d+$', file)]
+
+    # Combine all parts into a single file
+    combined_file_path = os.path.join(output_folder, 'combined.zip')
+    with open(combined_file_path, 'wb') as combined_file:
+        for zip_file in sorted(zip_files):
+            zip_file_path = os.path.join(input_folder, zip_file)
+            with open(zip_file_path, 'rb') as part_file:
+                shutil.copyfileobj(part_file, combined_file)
+
+    # Unzip the combined file
+    try:
+        with ZipFile(combined_file_path, 'r') as zip_ref:
+            zip_ref.extractall(output_folder)
+        print(f"Successfully extracted combined file to {output_folder}")
+
+    except BadZipFile:
+        print("Error: Combined file is not a valid zip file")
+
+    finally:
+        # Optional: Remove the combined file if you no longer need it
+        os.remove(combined_file_path)
+
+
+
+
+def proxy_activate() : 
+    os.environ['HTTP_PROXY'] = ''
+    os.environ['HTTPS_PROXY'] = ''    
+    
+
+def download_files(zip_urls, download_path='downloads'):
+    os.makedirs(download_path, exist_ok=True)
+    for url in zip_urls:
+        # Download the zip file
+        response = requests.get(url)
+        file_name = os.path.join(download_path, os.path.basename(url))
+        with open(file_name, 'wb') as file:
+            file.write(response.content)
+
+def ImgFrMat(mat_file) : 
+    
+    mat_data = loadmat(mat_file) 
+    
+    fs=4000
+    name_val = ['current','f1','f2', 'f3' ,'voltage']
+    current = np.squeeze(mat_data['current'])
+    voltage =np.squeeze( mat_data['voltage'] )
+    for name in name_val : 
+        try : 
+            plt.figure()
+            if name == 'current' :
+                f, t, Zxx = stft(current, fs=fs, nperseg=38*10)  # Adjust nperseg as needed
+                # change from image to direct information 
+                x_real =  (np.real(Zxx))
+                x_imag =  ( np.imag(Zxx) )
+                x_angle = np.angle(Zxx)/np.pi
+                array1 = np.repeat(x_real,16, axis = 1 )
+                array2 = np.repeat( x_imag ,16, axis = 1 )
+                array3 =  np.repeat( x_angle,16, axis = 1 )
+                # Normalize the arrays
+                array1 = 1*( (array1 - np.min(array1)) / (np.max(array1) - np.min(array1)))
+                array2 = 1*( (array2 - np.min(array2)) / (np.max(array2) - np.min(array2)))
+                array3 = 1*( (array3 - np.min(array3)) / (np.max(array3) - np.min(array3)))
+                # Create RGB image
+                rgb_image = np.dstack((array1, array2, array3))
+                plt.imshow(rgb_image)
+                print('processed current')
+            
+            else :
+                if  name == 'voltage' :
+                    f, t, Zxx = stft(voltage, fs=fs, nperseg=38*10)  # Adjust nperseg as needed
+                    # change from image to direct information 
+                    x_real =  (np.real(Zxx))
+                    x_imag =  ( np.imag(Zxx) )
+                    x_angle = np.angle(Zxx)/np.pi
+                    array1 = np.repeat(x_real,16, axis = 1 )
+                    array2 = np.repeat( x_imag ,16, axis = 1 )
+                    array3 =  np.repeat( x_angle,16, axis = 1 )
+                    # Normalize the arrays
+                    array1 = 1*( (array1 - np.min(array1)) / (np.max(array1) - np.min(array1)))
+                    array2 = 1*( (array2 - np.min(array2)) / (np.max(array2) - np.min(array2)))
+                    array3 = 1*( (array3 - np.min(array3)) / (np.max(array3) - np.min(array3)))
+                    # Create RGB image
+                    rgb_image = np.dstack((array1, array2, array3))
+                    plt.imshow(rgb_image)
+                    print('processed voltage')    
+                
+                else :                          
+                   f, t, Zxx = stft(np.squeeze(mat_data[name]), fs=fs, nperseg=38*1)  # Adjust nperseg as needed
+                   # plt.pcolormesh(t, f,np.log10( np.abs(Zxx)))
+                   x_real =  (np.real(Zxx))
+                   x_imag =  ( np.imag(Zxx) )
+                   x_angle = np.angle(Zxx)/np.pi
+                   array1 = np.repeat(x_real,5, axis = 0 )
+                   array2 = np.repeat( x_imag ,5, axis = 0 )
+                   array3 =  np.repeat( x_angle,5, axis = 0 )
+                   # Normalize the arrays
+                   array1 = 1*( (array1 - np.min(array1)) / (np.max(array1) - np.min(array1)))
+                   array2 = 1*( (array2 - np.min(array2)) / (np.max(array2) - np.min(array2)))
+                   array3 = 1*( (array3 - np.min(array3)) / (np.max(array3) - np.min(array3)))
+                   # Create RGB image
+                   rgb_image = np.dstack((array1, array2, array3))
+                   plt.imshow(rgb_image)
+                   print('processed',name, np.shape(rgb_image))
+               
+            plt.axis('off')
+            mat_file = mat_file.replace('.mat','')
+            file_png = mat_file.rstrip() + name + '.png'
+            file_dmg = file_png.replace('.png', '.dmp')
+            pickle.dump(rgb_image, open(file_dmg,'wb'))
+            if os.path.isfile(file_png):
+                os.remove(file_png)
+            print(file_png)
+            plt.savefig(file_png, bbox_inches='tight', pad_inches=0, transparent=True)
+            plt.close()
+        except : 
+            print('Can not create image')
+
+    
+
+
+
+if __name__ == "__main__":
+    list_link = [
+        "https://zhsaafddbodweu.blob.core.windows.net/sdia/SDIA.zip.001",
+        "https://zhsaafddbodweu.blob.core.windows.net/sdia/SDIA.zip.002",
+        "https://zhsaafddbodweu.blob.core.windows.net/sdia/SDIA.zip.003",
+        "https://zhsaafddbodweu.blob.core.windows.net/sdia/SDIA.zip.004",
+        "https://zhsaafddbodweu.blob.core.windows.net/sdia/SDIA.zip.005",
+        "https://zhsaafddbodweu.blob.core.windows.net/sdia/SDIA.zip.006"
+    ]
+    
+    input_folder = ''  # Replace with the path to your folder
+    output_folder = ''  # Replace with the desired output folder
+
+    proxy_activate() # Activate the proxy if needed
+    download_files(list_link,input_folder) # download all file 
+    unzip_all_files(input_folder, output_folder) # unzip 
+    
+    
+    # Time series data to image , need to think about the hyper parameters        
+    file_list = os.listdir(output_folder + '\SDIA')
+    mat_files = [file for file in file_list if file.lower().endswith('.mat')]
+    
+    for mat_file in mat_files:
+        ImgFrMat(output_folder +  "\\SDIA\\" +  mat_file) 
