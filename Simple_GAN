@@ -1,0 +1,118 @@
+import torch
+import torch.nn as nn
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+# Parameters
+latent_dim = 100
+output_dim =100  # Adjust series_length if necessary
+n_epochs = 15000
+batch_size = 128
+
+# Generator model
+class Generator(nn.Module):
+    def __init__(self, latent_dim, output_dim):
+        super(Generator, self).__init__()
+        self.model = nn.Sequential(
+            nn.Linear(latent_dim, 128),
+            nn.ReLU(),
+            nn.Linear(128, 256),
+            nn.ReLU(),
+            nn.Linear(256, 512),
+            nn.ReLU(),
+            nn.Linear(512, output_dim),  # Adjusted to match the discriminator's input_dim
+        )
+
+    def forward(self, z):
+        return self.model(z)
+
+# Discriminator model
+class Discriminator(nn.Module):
+    def __init__(self, input_dim):
+        super(Discriminator, self).__init__()
+        self.model = nn.Sequential(
+            nn.Linear(input_dim, 512),
+            nn.ReLU(),
+            nn.Linear(512, 256),
+            nn.ReLU(),
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.Linear(128, 1),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, x):
+        return self.model(x)
+
+# Generate real time series data (sine waves with different frequencies)
+def generate_real_samples(n_samples, output_dim):
+    frequencies = np.random.uniform(0.1, 5, size=(n_samples, 1))  # Random frequencies between 0.1 and 5
+    phases = np.random.uniform(0, 2*np.pi, size=(n_samples, 1))  # Random phases
+    X = np.empty((n_samples, output_dim))
+    for i in range(n_samples):
+        t = np.linspace(0, 1, output_dim)
+        X[i] = np.sin(2 * np.pi * frequencies[i] * t + phases[i])
+    y = np.ones((n_samples, 1))
+    return torch.tensor(X, dtype=torch.float32), torch.tensor(y, dtype=torch.float32)
+
+# Generate fake time series data
+def generate_fake_samples(generator, n_samples, latent_dim):
+    z = torch.randn(n_samples, latent_dim)
+    generated_series = generator(z)
+    y = torch.zeros(n_samples, 1)
+    return generated_series, y
+
+# Plot generated time series data
+def plot_generated_series(generator, epoch, output_dim):
+    generated_series, _ = generate_fake_samples(generator, 1, output_dim)
+    plt.figure()
+    plt.plot(generated_series.detach().numpy().flatten())
+    plt.title(f'Generated Time Series (Epoch {epoch})')
+    plt.xlabel('Time')
+    plt.ylabel('Value')
+    plt.show()
+
+
+
+# Initialize generator and discriminator
+generator = Generator(latent_dim, output_dim)  # Use series_length as the output dimension
+discriminator = Discriminator(output_dim)
+
+# Loss function and optimizers
+criterion = nn.BCELoss()
+gen_optimizer = torch.optim.Adam(generator.parameters(), lr=0.0002)
+disc_optimizer = torch.optim.Adam(discriminator.parameters(), lr=0.0002)
+
+
+
+
+# Training loop
+for epoch in range(n_epochs):
+    # Train discriminator
+    discriminator.zero_grad()
+    real_series, real_labels = generate_real_samples(batch_size // 2, latent_dim)
+    fake_series, fake_labels = generate_fake_samples(generator, batch_size // 2, latent_dim)
+    
+    real_output = discriminator(real_series)
+    real_loss = criterion(real_output, real_labels)
+    
+    fake_output = discriminator(fake_series)
+    fake_loss = criterion(fake_output, fake_labels)
+    
+    discriminator_loss = real_loss + fake_loss
+    discriminator_loss.backward()
+    disc_optimizer.step()
+
+    # Train generator
+    generator.zero_grad()
+    z = torch.randn(batch_size, latent_dim)
+    gen_output = discriminator(generator(z))
+    generator_loss = criterion(gen_output, torch.ones(batch_size, 1))
+    generator_loss.backward()
+    gen_optimizer.step()
+
+    # Print progress
+    if epoch % 1000 == 0:
+        print(f"Epoch: {epoch}, Discriminator Loss: {discriminator_loss.item()}, Generator Loss: {generator_loss.item()}")
+        plot_generated_series(generator, epoch, latent_dim)
