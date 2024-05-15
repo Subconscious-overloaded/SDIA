@@ -1,0 +1,79 @@
+import torchvision.transforms as transforms
+import torch.nn as nn
+import torchvision
+import math
+import matplotlib.pyplot as plt
+import torch
+import urllib
+import numpy as np
+import PIL
+from functools import partial
+from scipy.signal import stft
+import scipy.io
+from scipy import signal
+
+
+file_png = r""
+
+
+
+spectrogram_img =PIL.Image.open(file_png)
+
+# spectrogram_img = spectrogram_img.convert('RGB')
+
+image_array = np.array(spectrogram_img)
+
+R_channel = image_array[:,:,0]
+B_channel = image_array[:,:,1]
+G_channel = image_array[:,:,2]
+
+
+R_convert = []
+G_convert = []
+
+#Current image 
+# for i in range(0,8) : 
+    
+#     val = np.sum( R_channel[:,i*16:(i+1)*16] /16,axis=1)
+#     print(i,val,(i+1)*16)
+#     R_convert.append( val)
+#     val = np.sum( G_channel[:,i*16:(i+1)*16] /16,axis=1)
+#     print(i,val,(i+1)*16)
+#     G_convert.append( val)
+
+#Frab image
+
+for i in range(0,19) : 
+    
+    val = np.sum( R_channel[i*5:(i+1)*5,:] /5,axis=0)
+    print(i,val,(i+1)*5)
+    R_convert.append( val)
+    val = np.sum( G_channel[i*5:(i+1)*5,:] /5,axis=0)
+    print(i,val,(i+1)*5)
+    G_convert.append( val)
+R_convert.append(R_channel[-1,:])    
+G_convert.append(G_channel[-1,:])
+
+
+R_convert = np.asarray(R_convert )   
+G_convert = np.asarray(G_convert ) 
+
+G_convert = (G_convert -127.5)/255*2*np.pi
+# G_convert = np.transpose(G_convert)  
+# R_convert = np.transpose(R_convert)
+R_convert = R_convert -np.mean(R_convert)
+
+
+
+fs = 4000
+# a= a*10 
+# istft_rdphase = a + 1j * a * np.tan(G_convert)
+istft_rdphase = R_convert + 1j * R_convert* np.tan(G_convert)
+# istft_rdphase = (a * np.exp(1j * b)) 
+
+_, xrec = signal.istft(istft_rdphase, fs)
+# _, xrec1 = signal.istft(istft_rdphase1, fs)
+plt.plot(xrec)
+
+
+plt.plot(abs(xrec))
